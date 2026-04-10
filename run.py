@@ -37,11 +37,14 @@ def main():
     p = argparse.ArgumentParser(description='讲座自动切片工具')
     p.add_argument('--video',       required=True, help='输入视频 (.mp4)')
     p.add_argument('--srt',         required=True, help='输入字幕 (.srt)')
-    p.add_argument('--out',         default='./lecture_output', help='输出根目录')
-    p.add_argument('--model',       default=None,  help='指定 LLM 模型（gemini/gpt4o/claude）')
-    p.add_argument('--skip-step1',  action='store_true', help='跳过标注，直接用已有 tagger_result.json')
-    p.add_argument('--skip-step2',  action='store_true', help='跳过切片，直接用已有 clips/')
-    p.add_argument('--dry-run',     action='store_true', help='Step2 只预览不执行')
+    p.add_argument('--out',          default='./lecture_output', help='输出根目录')
+    p.add_argument('--model',        default=None,  help='指定 LLM 模型（gemini/gpt4o/claude）')
+    p.add_argument('--srt',          default=None,  help='已有字幕文件（可选，没有则自动转写）')
+    p.add_argument('--whisper',      default='auto', help='转写服务：auto | groq | openai | local')
+    p.add_argument('--skip-step0',   action='store_true', help='跳过转写，--srt 必须提供')
+    p.add_argument('--skip-step1',   action='store_true', help='跳过标注，直接用已有 tagger_result.json')
+    p.add_argument('--skip-step2',   action='store_true', help='跳过切片，直接用已有 clips/')
+    p.add_argument('--dry-run',      action='store_true', help='Step2 只预览不执行')
     args = p.parse_args()
 
     out_dir   = Path(args.out)
@@ -51,18 +54,35 @@ def main():
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # SRT 路径：用户提供 or 自动生成
+    srt_path = args.srt or str(out_dir / 'input.srt')
+
     print(f"""
 lecture-clipper 启动
   视频: {args.video}
-  字幕: {args.srt}
   输出: {out_dir}
   模型: {args.model or '自动选择'}
 """)
 
+    # ── Step 0: 视频转文字 ────────────────────────────────────
+    if not args.skip_step0 and not args.srt:
+        banner("Step 0 / 3 — 视频转文字（Whisper）")
+        run_step('step0_transcribe.py', [
+            '--video', args.video,
+            '--out',   srt_path,
+            '--provider', args.whisper,
+        ])
+    elif args.srt:
+        print(f"✓ 使用已有字幕: {args.srt}")
+    else:
+        if not Path(srt_path).exists():
+            print(f"❌ --skip-step0 但找不到字幕: {srt_path}")
+            sys.exit(1)
+
     # ── Step 1: 话题标注 ──────────────────────────────────────
     if not args.skip_step1:
         banner("Step 1 / 3 — 话题标注（LLM）")
-        step1_args = ['--srt', args.srt, '--out', str(meta_dir)]
+        step1_args = ['--srt', srt_path, '--out', str(meta_dir)]
         if args.model:
             step1_args += ['--model', args.model]
         run_step('step1_tagger.py', step1_args)
