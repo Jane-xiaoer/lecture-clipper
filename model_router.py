@@ -14,6 +14,16 @@ class ModelConfig:
     context_k: int     # 支持的 context 大小（千 token）
 
 # 按优先级排列，context 越大越靠前
+# 自定义 OpenAI 兼容端点（小龙虾/OpenClaw 自带模型走这里）
+# 设置 OPENAI_BASE_URL + OPENAI_API_KEY 即可
+CUSTOM_ENDPOINT = {
+    "name": "Custom / OpenClaw Built-in",
+    "model_id": None,  # 读 OPENAI_MODEL_ID，默认 gpt-4o
+    "base_url": None,  # 读 OPENAI_BASE_URL
+    "env_key": "OPENAI_API_KEY",
+    "context_k": 200,
+}
+
 KNOWN_MODELS = [
     # Gemini — 超长 context，速度快，价格低
     {
@@ -95,6 +105,21 @@ def detect_available(min_context_k=50) -> list[ModelConfig]:
     load_env_from_files()
     seen = set()
     available = []
+
+    # 优先：自定义端点（小龙虾自带模型 / 本地模型）
+    custom_base = os.environ.get("OPENAI_BASE_URL", "")
+    custom_key  = os.environ.get("OPENAI_API_KEY", "")
+    if custom_base and custom_key:
+        model_id = os.environ.get("OPENAI_MODEL_ID", "gpt-4o")
+        available.append(ModelConfig(
+            name=f"Custom ({custom_base})",
+            model_id=model_id,
+            base_url=custom_base,
+            api_key=custom_key,
+            context_k=200,
+        ))
+        seen.add(model_id)
+
     for m in KNOWN_MODELS:
         key = os.environ.get(m["env_key"], "")
         if not key or key.startswith("your_") or m["model_id"] in seen:

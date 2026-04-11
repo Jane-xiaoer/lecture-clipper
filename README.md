@@ -1,107 +1,124 @@
 # lecture-clipper
 
-直播讲座自动切片工具 — 模型无关，任何 agent / 任何电脑都能跑
+把一段直播讲座视频，自动按话题切成多段短片，每段自动加字幕烧入。
 
-## 第一次使用（新电脑必做）
+**适合人群**：录完直播想二次传播的老师、讲师、博主。  
+**输入**：一个 .mp4 视频  
+**输出**：多个话题切片 .mp4，每段带字幕
+
+---
+
+## 给 AI 助手（小龙虾 / OpenClaw）的使用说明
+
+### 第一步：安装（只需做一次）
 
 ```bash
-# 1. 安装唯一的 Python 依赖
-pip install openai
-
-# 2. 安装带字幕功能的 ffmpeg（自动检测系统，下载合适版本）
-python setup_ffmpeg.py
-
-# 3. 设置 LLM API Key（至少一个）
-export GEMINI_API_KEY=你的key       # 推荐，免费额度多
-export ANTHROPIC_API_KEY=你的key    # 或者用 Claude
-export OPENAI_API_KEY=你的key       # 或者用 GPT-4o
-export OPENROUTER_API_KEY=你的key   # 或者用 OpenRouter
+git clone https://github.com/Jane-xiaoer/lecture-clipper.git
+cd lecture-clipper
+bash install.sh
 ```
 
-> **为什么要 setup_ffmpeg.py？**
-> 剪辑和字幕烧入用的是 ffmpeg，但系统默认安装的 ffmpeg
-> 通常缺少字幕渲染功能（libass）。setup_ffmpeg.py 会自动
-> 下载一个功能完整的版本，放在 ~/.lecture-clipper/ffmpeg。
-> 只需运行一次，之后自动使用。
+### 第二步：运行
 
----
-
-## 使用方法
+**方式 A：用户提供 API Key（推荐，效果最好）**
 
 ```bash
-# 完整流程（自动选最佳模型）
-python run.py --video input.mp4 --srt input.srt
+python3 run.py \
+  --video /path/to/视频.mp4 \
+  --api-key 用户的KEY \
+  --api-provider gemini
+```
 
-# 指定输出目录
-python run.py --video input.mp4 --srt input.srt --out ./my_output
+支持的 `--api-provider`：
+- `gemini`（Google，免费额度大，**推荐**）
+- `openai`（GPT-4o）
+- `anthropic`（Claude）
+- `openrouter`（多模型聚合）
 
-# 指定使用哪个模型
-python run.py --video input.mp4 --srt input.srt --model gemini
-python run.py --video input.mp4 --srt input.srt --model gpt4o
-python run.py --video input.mp4 --srt input.srt --model claude
+**方式 B：用小龙虾自带模型做话题拆解**
 
-# 已有话题标注文件，跳过第1步
-python run.py --video input.mp4 --srt input.srt --skip-step1
+```bash
+python3 run.py \
+  --video /path/to/视频.mp4 \
+  --api-base http://localhost:11434/v1 \
+  --api-key ollama \
+  --api-provider openai
+```
 
-# 单独运行某一步
-python step1_tagger.py --srt input.srt --out metadata/
-python step2_cutter.py --video input.mp4 --srt input.srt --meta metadata/ --out clips/
-python step3_postprocess.py --clips clips/ --out published/
+把 `--api-base` 替换成小龙虾的本地模型地址即可。
+
+---
+
+### 交互流程（AI 助手需要理解这个）
+
+脚本运行过程中会输出话题列表，格式如下：
+
+```
+────────────────────────────────────────────────────
+  📋 AI 识别了 4 个话题：
+────────────────────────────────────────────────────
+  1. 房地产市场分析
+     时间：3:12～15:40  |  42:00～51:20
+  2. 创业心态与执行力
+     时间：20:00～31:20
+  3. 投资避坑指南
+     时间：55:10～1:08:30
+  4. Q&A 问答
+     时间：1:10:00～1:25:00
+────────────────────────────────────────────────────
+
+  ✅ 分组没问题？直接按 Enter 开始切片
+  ✏️  有问题？用中文说出来（例：把第2和第3个话题合并 / 去掉广告部分）
+  → 
+```
+
+**AI 助手处理逻辑：**
+1. 把话题列表展示给用户看
+2. 询问用户是否满意
+3. 满意 → 向脚本输入回车（空行）
+4. 不满意 → 把用户的修改意见原文输入给脚本
+5. 循环直到用户满意，然后脚本自动切片完成
+
+---
+
+### 输出位置
+
+默认输出到 `./lecture_output/published/`，每个话题一个 .mp4。
+
+可以用 `--out` 指定：
+```bash
+python3 run.py --video 视频.mp4 --api-key KEY --api-provider gemini --out ~/Desktop/切片结果
 ```
 
 ---
 
-## 三个步骤说明
+### 常见问题
 
-| 步骤 | 脚本 | 需要 LLM？ | 说明 |
-|------|------|-----------|------|
-| Step 1 | step1_tagger.py | ✅ 是 | 读全文字幕，语义分组话题 |
-| Step 2 | step2_cutter.py | ❌ 否 | FFmpeg 按话题切片 |
-| Step 3 | step3_postprocess.py | ❌ 否 | 烧入标题+字幕，视频内容不动 |
+**Q：字幕烧不进去，报错 "No such filter: ass"**  
+A：运行 `python3 setup_ffmpeg.py` 自动下载带 libass 的 ffmpeg。
 
-Step 1 运行后会暂停，让你检查 `metadata/tagger_review.md`，
-确认话题分组正确后按 Enter 继续。可以直接编辑 `metadata/tagger_result.json` 修改。
+**Q：转写很慢**  
+A：申请免费 Groq Key（https://console.groq.com），然后：  
+`python3 run.py --video 视频.mp4 --api-key GROQ_KEY --api-provider groq`
 
----
-
-## 支持的模型（Step 1 用）
-
-| 推荐度 | 模型 | API 变量 | 说明 |
-|--------|------|----------|------|
-| ⭐⭐⭐ | Gemini 2.0 Flash | `GEMINI_API_KEY` | 百万 token 上下文，快，便宜 |
-| ⭐⭐⭐ | Claude Sonnet/Opus | `ANTHROPIC_API_KEY` | 中文语义最强 |
-| ⭐⭐⭐ | Claude (OpenRouter) | `OPENROUTER_API_KEY` | 同上，走中转 |
-| ⭐⭐ | GPT-4o | `OPENAI_API_KEY` | 128k 上下文够用 |
-
-模型自动按优先级选择，有哪个 key 用哪个。
+**Q：话题切得不准**  
+A：在确认环节用中文说出调整意见，脚本会重新分析。
 
 ---
 
-## 输出结构
+### 完整参数列表
 
-```
-输出目录/
-  metadata/
-    tagger_result.json    # 话题标注（可人工编辑）
-    tagger_review.md      # 人工审核报告
-  clips/
-    01_话题名.mp4          # 原始切片（无字幕）
-    subtitles/
-      01_话题名.srt        # 对应字幕
-  published/
-    01_话题名.mp4          # 最终成片（已烧入标题+字幕）
-```
-
----
-
-## 常见问题
-
-**Q: setup_ffmpeg.py 下载失败？**
-macOS: `brew tap homebrew-ffmpeg/ffmpeg && brew install homebrew-ffmpeg/ffmpeg/ffmpeg --with-libass`
-Linux: `sudo apt install ffmpeg` (Ubuntu/Debian 的 apt 版通常含 libass)
-
-**Q: 字幕显示方块？**
-缺少中文字体。Linux 用户：`sudo apt install fonts-wqy-microhei`
-
-**Q: Step 1 标注结果不对？**
-直接编辑 `metadata/tagger_result.json`，然后用 `--skip-step1` 重跑。
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `--video` | 输入视频路径（必填）| — |
+| `--api-key` | LLM API Key | 读环境变量 |
+| `--api-provider` | gemini/openai/anthropic/openrouter | gemini |
+| `--api-base` | 自定义 API 地址（小龙虾/本地模型）| — |
+| `--srt` | 已有字幕文件（可选）| 自动转写 |
+| `--out` | 输出目录 | ./lecture_output |
+| `--model` | 指定模型名称 | 自动选最优 |
+| `--whisper` | 转写服务：auto/groq/openai/local | auto |
+| `--skip-step0` | 跳过转写（需提供 --srt）| — |
+| `--skip-step1` | 跳过话题标注 | — |
+| `--skip-step2` | 跳过切片 | — |
+| `--dry-run` | 只预览切片计划不执行 | — |

@@ -69,17 +69,35 @@ def run_step(script, args_list):
 
 def main():
     p = argparse.ArgumentParser(description='讲座自动切片工具')
-    p.add_argument('--video',       required=True, help='输入视频 (.mp4)')
-    p.add_argument('--srt',         required=True, help='输入字幕 (.srt)')
+    p.add_argument('--video',        required=True,  help='输入视频 (.mp4)')
     p.add_argument('--out',          default='./lecture_output', help='输出根目录')
-    p.add_argument('--model',        default=None,  help='指定 LLM 模型（gemini/gpt4o/claude）')
-    p.add_argument('--srt',          default=None,  help='已有字幕文件（可选，没有则自动转写）')
+    p.add_argument('--model',        default=None,   help='指定 LLM 模型（gemini/gpt4o/claude）')
+    p.add_argument('--api-key',      default=None,   help='LLM API Key（也可设环境变量）')
+    p.add_argument('--api-provider', default=None,   help='API 提供商：gemini|openai|anthropic|openrouter')
+    p.add_argument('--api-base',     default=None,   help='自定义 OpenAI 兼容 API 地址（小龙虾/本地模型）')
+    p.add_argument('--srt',          default=None,   help='已有字幕文件（可选，没有则自动转写）')
     p.add_argument('--whisper',      default='auto', help='转写服务：auto | groq | openai | local')
     p.add_argument('--skip-step0',   action='store_true', help='跳过转写，--srt 必须提供')
     p.add_argument('--skip-step1',   action='store_true', help='跳过标注，直接用已有 tagger_result.json')
     p.add_argument('--skip-step2',   action='store_true', help='跳过切片，直接用已有 clips/')
     p.add_argument('--dry-run',      action='store_true', help='Step2 只预览不执行')
     args = p.parse_args()
+
+    # 注入 API Key 到环境变量
+    if args.api_key:
+        provider_map = {
+            'gemini':     'GEMINI_API_KEY',
+            'openai':     'OPENAI_API_KEY',
+            'anthropic':  'ANTHROPIC_API_KEY',
+            'openrouter': 'OPENROUTER_API_KEY',
+        }
+        if args.api_base:
+            # 自定义端点（小龙虾自带模型）
+            os.environ['OPENAI_API_KEY']  = args.api_key
+            os.environ['OPENAI_BASE_URL'] = args.api_base
+        else:
+            env_key = provider_map.get(args.api_provider or 'gemini', 'GEMINI_API_KEY')
+            os.environ[env_key] = args.api_key
 
     out_dir   = Path(args.out)
     meta_dir  = out_dir / 'metadata'
