@@ -25,6 +25,40 @@ def banner(msg):
     print(f"  {msg}")
     print('='*60)
 
+def show_topics(meta_dir):
+    """在终端直接显示话题分组（时间段格式，小白可读）"""
+    import json, re as _re
+    meta_dir = Path(meta_dir)
+    result_file = meta_dir / 'tagger_result.json'
+    if not result_file.exists():
+        return
+    result = json.loads(result_file.read_text(encoding='utf-8'))
+    topics = [t for t in result['topics'] if t.get('id') != 'skip']
+
+    # 尝试读 transcript_numbered.txt 来还原时间（格式 [0000|MM:SS]）
+    time_map = {}
+    txt = meta_dir / 'transcript_numbered.txt'
+    if txt.exists():
+        for line in txt.read_text(encoding='utf-8').splitlines():
+            m = _re.match(r'\[(\d+)\|(\d+:\d+)\]', line)
+            if m:
+                time_map[int(m.group(1))] = m.group(2)
+
+    def idx2time(idx):
+        return time_map.get(idx, f"#{idx}")
+
+    print(f"\n{'─'*52}")
+    print(f"  📋 AI 识别了 {len(topics)} 个话题：")
+    print(f"{'─'*52}")
+    for i, t in enumerate(topics, 1):
+        ranges = t.get('ranges', [])
+        time_parts = [f"{idx2time(r[0])}～{idx2time(r[1])}" for r in ranges]
+        time_str = "  |  ".join(time_parts)
+        print(f"  {i}. {t['name']}")
+        if time_str:
+            print(f"     时间：{time_str}")
+    print(f"{'─'*52}")
+
 def run_step(script, args_list):
     cmd = [sys.executable, str(SKILL_DIR / script)] + args_list
     print(f"$ {' '.join(cmd)}")
@@ -87,9 +121,21 @@ lecture-clipper 启动
             step1_args += ['--model', args.model]
         run_step('step1_tagger.py', step1_args)
 
-        print("\n⚠️  请检查 metadata/tagger_review.md，确认话题分组正确")
-        print("   如需修改，直接编辑 metadata/tagger_result.json，然后按 Enter 继续")
-        input("   [按 Enter 继续 Step 2]")
+        # 自然语言确认循环（小白友好）
+        while True:
+            show_topics(meta_dir)
+            print()
+            print("  ✅ 分组没问题？直接按 Enter 开始切片")
+            print("  ✏️  有问题？用中文说出来（例：把第2和第3个话题合并 / 去掉广告部分）")
+            feedback = input("  → ").strip()
+            if not feedback:
+                break
+            print(f"\n  收到，正在根据你的意见重新分析...")
+            step1_args_retry = ['--srt', srt_path, '--out', str(meta_dir),
+                                '--feedback', feedback]
+            if args.model:
+                step1_args_retry += ['--model', args.model]
+            run_step('step1_tagger.py', step1_args_retry)
     else:
         tagger_json = meta_dir / 'tagger_result.json'
         if not tagger_json.exists():
