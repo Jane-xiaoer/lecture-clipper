@@ -135,3 +135,22 @@ A：转写会用本地 Whisper（慢），话题分析需要至少一个 LLM Key
 | `--skip-step1` | 跳过话题标注，用已有分析结果 | — |
 | `--skip-step2` | 跳过切片 | — |
 | `--dry-run` | 只预览切片计划，不实际执行 | — |
+
+---
+
+## 📱 关注作者 / Follow Me
+
+如果这个仓库对你有帮助，欢迎关注我。后面我会持续更新更多 AI Skill、视频转字、直播切片和创作者工作流。
+
+If this repo helped you, follow me for more AI skills, video workflows, creator automation tools, and content systems.
+
+- X (Twitter): [@xiaoerzhan](https://x.com/xiaoerzhan)
+- 微信公众号 / WeChat Official Account: 扫码关注 / Scan to follow
+
+<p align="center">
+  <img src="./follow-wechat-qrcode.jpg" alt="Jane WeChat Official Account QR code" width="300" />
+</p>
+
+<p align="center"><strong>中文：</strong>欢迎关注我的公众号，一起研究 AI Skill、视频转字、直播切片和内容工作流。</p>
+
+<p align="center"><strong>English:</strong> Follow my WeChat Official Account for more AI skills, video transcription, clip generation, and creator workflows.</p>
